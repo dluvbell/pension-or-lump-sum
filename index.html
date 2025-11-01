@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="author" content="dluvbell">
-    <title>Retirement Scenario 1: Required Growth Rate Calculator (v3)</title>
+    <title>Retirement Scenario Calculator: Comparison (v12)</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -18,50 +18,81 @@
     </div>
 
     <div class="calculator-container">
-        <h1>Retirement Scenario 1: Required Growth Rate Calculator</h1>
-        <p>Calculates the future value of assets and withdrawals to determine the required average annual investment growth rate.</p>
+        <h1>Retirement Scenario Calculator: Comparison</h1>
+        <p>Compares the future value of a Lump Sum (Scenario 2) against a Pension (Scenario 1).</p>
         
-        <div class="input-grid">
+        <div class="input-grid common-inputs">
             <div class="input-group">
                 <label for="current_date">Current Date</label>
                 <input type="date" id="current_date">
             </div>
             <div class="input-group">
-                <label for="cv_receipt_date">CV Receipt Date</label>
-                <input type="date" id="cv_receipt_date">
+                <label for="birth_year">Birth Year</label>
+                <input type="number" id="birth_year" value="1985">
             </div>
             <div class="input-group">
-                <label for="payout_start_date">Payout Start Date</label>
-                <input type="date" id="payout_start_date">
+                <label for="inflation_rate">General Inflation Rate (%)</label>
+                <input type="number" id="inflation_rate" value="3" step="0.1">
+            </div>
+        </div>
+        
+        <hr>
+
+        <h2>Scenario 1: Pension (Cumulative Total)</h2>
+        <div class="input-grid">
+            <div class="input-group">
+                <label for="pension_payout_start_date">Payout Start Date</label>
+                <input type="date" id="pension_payout_start_date">
+                <span class="age-display" id="age_pension_start">Age: -</span>
+            </div>
+            <div class="input-group">
+                <label for="pension_payout_end_date">Payout End Date</label>
+                <input type="date" id="pension_payout_end_date">
+                <span class="age-display" id="age_pension_end">Age: -</span>
+            </div>
+            <div class="input-group">
+                <label for="payout_cola">Payout COLA (%)</label>
+                <input type="number" id="payout_cola" value="2" step="0.1">
             </div>
         </div>
 
         <div class="input-group">
-            <label for="cv">Initial Investment (CV, $)</label>
-            <input type="number" id="cv" value="600000">
+            <label for="annual_payout_today">Annual Payout (Today's $, $)</label>
+            <input type="number" id="annual_payout_today" value="52000">
         </div>
 
-        <div class="input-group">
-            <label for="c">Annual Contribution (After CV, Before Payout, $)</label>
-            <input type="number" id="c" value="10000">
+        <hr>
+        
+        <h2>Scenario 2: Lump Sum (CV/Asset)</h2>
+        <p style="margin-bottom: 5px; text-align: left;">* Enter your expected growth rate to simulate the asset value.</p>
+
+        <div class="input-grid scenario2-dates">
+            <div class="input-group">
+                <label for="cv_start_date">Asset Start Date</label>
+                <input type="date" id="cv_start_date">
+                <span class="age-display" id="age_cv_start">Age: -</span>
+            </div>
+            <div class="input-group">
+                <label for="cv_end_date">Asset End Date</label>
+                <input type="date" id="cv_end_date">
+                <span class="age-display" id="age_cv_end">Age: -</span>
+            </div>
         </div>
         
-        <div class="input-group">
-            <label for="p_current_value">Annual Withdrawal (in today's dollars, $)</label>
-            <input type="number" id="p_current_value" value="52000">
+        <div class="input-grid scenario2-inputs">
+            <div class="input-group">
+                <label for="initial_cv_value">Initial Lump Sum (CV, $)</label>
+                <input type="number" id="initial_cv_value" value="600000">
+            </div>
+            <div class="input-group">
+                <label for="asset_growth_rate">Asset Growth Rate (%)</label>
+                <input type="number" id="asset_growth_rate" value="6.0" step="0.1">
+            </div>
         </div>
         
-        <div class="input-group">
-            <label for="g_income">Annual Withdrawal Growth Rate (%)</label>
-            <input type="number" id="g_income" value="3">
-        </div>
+        <button id="manage-cw-btn">Manage Annual Contributions/Withdrawals</button>
 
-        <div class="input-group">
-            <label for="n_payout">Total Payout Period (Years)</label>
-            <input type="number" id="n_payout" value="30">
-        </div>
-
-        <button id="calculate-btn">Calculate Required Growth Rate</button>
+        <button id="calculate-btn" style="margin-top: 20px;">Run Comparison</button>
 
         <div class="toggles-wrapper">
             <div class="details-toggle-container">
@@ -88,7 +119,8 @@
         </div>
 
         <div id="graph-container">
-            <canvas id="balance-chart"></canvas>
+            <h3>Scenario Comparison: Future Value (FV)</h3>
+            <canvas id="comparison-chart"></canvas>
         </div>
 
         <div id="details-table-container">
@@ -113,6 +145,22 @@
                 <label for="agreement-checkbox">I have read, understand, and agree to the terms of use.</label>
             </div>
             <button id="modal-confirm-btn" disabled>Acknowledge</button>
+        </div>
+    </div>
+    
+    <div id="input-modal-overlay" class="modal-overlay hidden">
+        <div class="modal input-modal">
+            <h2>Manage Annual Cash Flows (Scenario 2)</h2>
+            <p>Define periods for additional contributions (Positive) or withdrawals (Negative).</p>
+            
+            <div id="cw-inputs-container">
+                </div>
+            
+            <div class="modal-buttons">
+                <button id="add-contribution-btn" class="modal-action-btn">➕ Add Contribution</button>
+                <button id="add-withdrawal-btn" class="modal-action-btn" style="background-color: #dc3545;">➖ Add Withdrawal</button>
+                <button id="close-modal-btn" style="margin-top: 15px;">Close & Save</button>
+            </div>
         </div>
     </div>
 
