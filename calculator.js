@@ -1,5 +1,5 @@
 /**
- * Retirement Scenario Calculator: Comparison (v12)
+ * Retirement Scenario Calculator: Comparison (v15 - Dropdown)
  * Author: dluvbell
  */
 document.addEventListener('DOMContentLoaded', () => {
@@ -181,9 +181,10 @@ document.addEventListener('DOMContentLoaded', () => {
     
     updateAges();
 
-    // [수정] asset_growth_rate 추가
+    // [수정] inputIds for Monte Carlo
     const inputIds = {
-        numbers: ['birth_year', 'inflation_rate', 'initial_cv_value', 'annual_payout_today', 'payout_cola', 'asset_growth_rate'],
+        numbers: ['birth_year', 'inflation_rate', 'initial_cv_value', 'annual_payout_today', 'payout_cola', 
+                  'mean_return', 'volatility', 'simulation_count'],
         dates: ['current_date', 'pension_payout_start_date', 'pension_payout_end_date', 'cv_start_date', 'cv_end_date']
     };
 
@@ -202,7 +203,10 @@ document.addEventListener('DOMContentLoaded', () => {
         // 1. Read values and perform basic validation
         const values = {};
         for (const id of inputIds.numbers) {
-            const value = parseFloat(document.getElementById(id).value);
+            // [수정] Read from select or input
+            const element = document.getElementById(id);
+            const value = parseFloat(element.value);
+            
             if (isNaN(value)) {
                 alert(`Please enter a valid number in the '${id}' field.`);
                 return;
@@ -217,6 +221,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             values[id] = new Date(value);
         }
+
+        // [추가] Warning for high simulation count
+        if (values.simulation_count > 10000) {
+            if (!confirm(`Running ${values.simulation_count.toLocaleString()} simulations may take several seconds and might make the browser unresponsive. Do you want to continue?`)) {
+                return; // Abort calculation
+            }
+        }
         
         // Ensure the latest C/W data is used
         cashFlowItems = readCashFlowInputs();
@@ -224,10 +235,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // Convert percentage inputs to decimals
         values.inflation_rate /= 100;
         values.payout_cola /= 100;
-        values.asset_growth_rate /= 100; 
+        // [수정] Monte Carlo inputs to decimals
+        values.mean_return /= 100; 
+        values.volatility /= 100;
         
         // --- Date and Time Calculations ---
-        // [수정] Get current year for C/W COLA calculation
         const currentYear = values.current_date.getFullYear();
         
         // Scenario 1 Period
@@ -256,50 +268,57 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- Scenario 1 Payout Setup ---
         const first_payout_at_start = values.annual_payout_today * Math.pow(1 + values.inflation_rate, n_payout_inflation_years);
         
-        // --- Run Independent Simulations ---
+        // --- [수정] Run Simulations ---
         
-        // Determine the full range of years for the chart (min of start dates, max of end dates)
         const simStartYear = Math.min(cvStartYear, pensionStartYear);
         const simEndYear = Math.max(cvEndYear, pensionEndYear);
 
-        // Run Scenario 1 Simulation (Cumulative FV)
+        // Run Scenario 1 Simulation (Deterministic)
         const scenario1Data = getScenario1Data(simStartYear, simEndYear, pensionStartYear, pensionEndYear, first_payout_at_start, values.payout_cola);
         
-        // [수정] Pass currentYear to Scenario 2 simulation
-        const scenario2Data = getScenario2Data(simStartYear, simEndYear, cvStartYear, currentYear, values.initial_cv_value, cashFlowItems, values.asset_growth_rate);
+        // Run Scenario 2 Monte Carlo Simulation
+        const simulationPaths = runMonteCarloSimulation(
+            values.simulation_count, simStartYear, simEndYear, cvStartYear, currentYear, 
+            values.initial_cv_value, cashFlowItems, values.mean_return, values.volatility
+        );
+        
+        // Process results to get percentiles
+        const scenario2Data = processSimulationResults(simulationPaths, simStartYear, simEndYear);
 
         resultContainer.classList.remove('hidden');
         
         const finalS1Value = scenario1Data[scenario1Data.length - 1].cumulativePayout;
-        const finalS2Value = scenario2Data[scenario2Data.length - 1].balance;
+        const finalS2Median = scenario2Data[scenario2Data.length - 1].p50;
+        const finalS2P5 = scenario2Data[scenario2Data.length - 1].p5;
+        const finalS2P95 = scenario2Data[scenario2Data.length - 1].p95;
 
         intermediateResultEl.innerHTML = `
-            At year ${simEndYear}:<br>
+            At year ${simEndYear} (after ${values.simulation_count.toLocaleString()} simulations):<br>
             Scenario 1 (Pension) Total Cumulative Payout: <b>$${finalS1Value.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</b>
             <br>
-            Scenario 2 (Asset) Final Value: <b>$${finalS2Value.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</b>
+            Scenario 2 (Asset) 50th Percentile (Median): <b>$${finalS2Median.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</b>
+            <br>
+            Scenario 2 (Asset) 90% Confidence Range: <b>$${finalS2P5.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</b> to <b>$${finalS2P95.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</b>
         `;
-        resultText.innerHTML = `Comparison based on an expected asset growth rate of <strong>${(values.asset_growth_rate * 100).toFixed(2)}%</strong>.`;
+        resultText.innerHTML = `Comparison based on Mean Return: <strong>${(values.mean_return * 100).toFixed(2)}%</strong>, Volatility: <strong>${(values.volatility * 100).toFixed(2)}%</strong>.`;
 
         // Generate Comparison Chart
         generateComparisonChart(
-            simStartYear,
-            simEndYear,
             values.birth_year,
             scenario1Data,
             scenario2Data
         );
         
-        // [추가] Generate Details Table
+        // Generate Details Table
         generateDetailsTable(values.birth_year, scenario1Data, scenario2Data);
         
-        // [수정] Show/Hide based on toggles
+        // Show/Hide based on toggles
         graphContainer.style.display = graphToggle.checked ? 'block' : 'none';
         tableContainer.style.display = detailsToggle.checked ? 'block' : 'none';
 
     });
 
-    // [수정] graphToggle: Hide/Show only graph
+    // Toggle Listeners
     graphToggle.addEventListener('change', () => {
         const chart = document.getElementById('comparison-chart').chart;
         if (chart) {
@@ -307,7 +326,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // [추가] detailsToggle: Hide/Show only table
     detailsToggle.addEventListener('change', () => {
         if (tableContainer.innerHTML.trim() !== '') {
             tableContainer.style.display = detailsToggle.checked ? 'block' : 'none';
@@ -315,10 +333,20 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
 
-    // --- [NEW] Financial Model Functions (v11) ---
+    // --- [NEW] Financial Model Functions (v14) ---
 
     /**
-     * Calculates Scenario 1: Cumulative Pension Payout FV
+     * [HELPER] Standard Normal (z-score) random number generator (Box-Muller transform)
+     */
+    function getNormalRandom() {
+        let u = 0, v = 0;
+        while(u === 0) u = Math.random(); //Converting [0,1) to (0,1)
+        while(v === 0) v = Math.random();
+        return Math.sqrt( -2.0 * Math.log( u ) ) * Math.cos( 2.0 * Math.PI * v );
+    }
+
+    /**
+     * Calculates Scenario 1: Cumulative Pension Payout FV (Unchanged)
      */
     function getScenario1Data(simStartYear, simEndYear, pensionStartYear, pensionEndYear, first_payout, payout_cola) {
         const data = [];
@@ -341,16 +369,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     /**
-     * [MODIFIED] Calculates Scenario 2: Simulated Asset FV
-     * Accepts currentYear to apply COLA from "Today"
+     * [MODIFIED] Runs the Monte Carlo Simulation (Scenario 2) with correct C/W timing
      */
-    function getScenario2Data(simStartYear, simEndYear, cvStartYear, currentYear, cv, cw_items, g_asset) {
-        const data = [];
-        let currentBalance = 0; // Balance is 0 before the asset start date
-        
-        if (simStartYear >= cvStartYear) {
-            currentBalance = cv;
-        }
+    function runMonteCarloSimulation(simulationCount, simStartYear, simEndYear, cvStartYear, currentYear, cv, cw_items, mean, volatility) {
+        const allPaths = []; // Array to store all simulation paths
 
         // Pre-process C/W items for easier lookup by year
         const cwMap = {};
@@ -361,85 +383,164 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        for (let year = simStartYear; year <= simEndYear; year++) {
+        for (let i = 0; i < simulationCount; i++) {
+            const currentPath = [];
+            let currentBalance = 0;
             
-            // If the simulation starts before the CV start date, balance remains 0
-            if (year < cvStartYear) {
-                data.push({ year: year, balance: 0 });
-                continue;
-            }
-            
-            // If this is the CV start year, set the balance *before* growth
-            if (year === cvStartYear) {
+            if (simStartYear >= cvStartYear) {
                 currentBalance = cv;
             }
-
-            // 1. Calculate Growth based on the balance at the START of the year
-            const growthAmount = currentBalance * g_asset;
             
-            // 2. Apply Annual Cash Flows (C/W) - Net Cash Flow
-            let netCashFlow = 0;
-            if (cwMap[year]) {
-                cwMap[year].forEach(item => {
-                    // [MODIFIED] Apply item.cola from currentYear (Today) to the current 'year'
-                    // This treats item.amount as "Today's Value"
-                    const n_cola_periods = Math.max(0, year - currentYear);
-                    const adjustedAmount = item.amount * Math.pow(1 + item.cola, n_cola_periods);
-                    netCashFlow += (item.type === 'Contribution' ? 1 : -1) * adjustedAmount;
+            for (let year = simStartYear; year <= simEndYear; year++) {
+                
+                if (year < cvStartYear) {
+                    currentPath.push({ year: year, balance: 0 });
+                    continue;
+                }
+                
+                if (year === cvStartYear) {
+                    currentBalance = cv;
+                }
+
+                // [FIX START] Apply C/W logic correctly (Withdrawal at Start, Contribution at End)
+                let balanceAfterWithdrawal = currentBalance;
+                let contribution = 0;
+
+                // 1. Apply Withdrawals (Start of Year)
+                if (cwMap[year]) {
+                    cwMap[year].forEach(item => {
+                        if (item.type === 'Withdrawal') {
+                            const n_cola_periods = Math.max(0, year - currentYear);
+                            const adjustedAmount = item.amount * Math.pow(1 + item.cola, n_cola_periods);
+                            balanceAfterWithdrawal -= adjustedAmount;
+                        }
+                    });
+                }
+                
+                // 2. Calculate Growth (on balance after withdrawal)
+                const randomReturn = getNormalRandom() * volatility + mean;
+                const growthAmount = balanceAfterWithdrawal * randomReturn;
+                let balanceAfterGrowth = balanceAfterWithdrawal + growthAmount;
+                
+                // 3. Apply Contributions (End of Year)
+                 if (cwMap[year]) {
+                    cwMap[year].forEach(item => {
+                        if (item.type === 'Contribution') {
+                            const n_cola_periods = Math.max(0, year - currentYear);
+                            const adjustedAmount = item.amount * Math.pow(1 + item.cola, n_cola_periods);
+                            balanceAfterGrowth += adjustedAmount;
+                        }
+                    });
+                }
+                // [FIX END]
+
+                // 4. Set Ending Balance
+                currentBalance = balanceAfterGrowth;
+                
+                currentPath.push({
+                    year: year,
+                    balance: currentBalance
                 });
             }
-            
-            // 3. Apply Payouts - NOT APPLIED (Scenarios are separate)
+            allPaths.push(currentPath);
+        }
+        return allPaths;
+    }
 
-            // 4. Calculate Ending Balance
-            currentBalance = currentBalance + growthAmount + netCashFlow;
+    /**
+     * [NEW] Processes the raw simulation paths into percentiles
+     */
+    function processSimulationResults(allPaths, simStartYear, simEndYear) {
+        const percentileData = [];
+        const simulationCount = allPaths.length;
+        
+        for (let year = simStartYear; year <= simEndYear; year++) {
+            const balancesForYear = [];
             
-            data.push({
+            // Find the index for the current year (all paths have same length)
+            const yearIndex = year - simStartYear; 
+            
+            for (let i = 0; i < simulationCount; i++) {
+                balancesForYear.push(allPaths[i][yearIndex].balance);
+            }
+            
+            // Sort the balances to find percentiles
+            balancesForYear.sort((a, b) => a - b);
+            
+            // Get 5th, 50th (Median), and 95th percentiles
+            const p5_index = Math.floor(simulationCount * 0.05);
+            const p50_index = Math.floor(simulationCount * 0.50);
+            const p95_index = Math.floor(simulationCount * 0.95);
+            
+            percentileData.push({
                 year: year,
-                balance: currentBalance
+                p5: balancesForYear[p5_index],
+                p50: balancesForYear[p50_index],
+                p95: balancesForYear[p95_index]
             });
         }
-
-        return data;
+        return percentileData;
     }
-    
+
     // --- Charting Function ---
     
     /**
-     * Generates a combined chart comparing S1 (Cumulative FV) and S2 (Simulated FV).
+     * [MODIFIED] Generates a chart with confidence bands
      */
-    function generateComparisonChart(simStartYear, simEndYear, birthYear, scenario1Data, scenario2Data) {
+    function generateComparisonChart(birthYear, scenario1Data, scenario2Data) {
         if (comparisonChart) comparisonChart.destroy(); 
         
         const labels = scenario1Data.map(d => d.year);
-        const dataPoints1 = scenario1Data.map(d => d.cumulativePayout); // Pension FV
-        const dataPoints2 = scenario2Data.map(d => d.balance); // Asset FV
         const ages = labels.map(year => year - birthYear);
 
-        // Determine min/max for chart scale
-        const allData = [...dataPoints1, ...dataPoints2];
-        const minVal = Math.min(0, ...allData) * 1.1; // Ensure 0 is included
+        const s1_fv = scenario1Data.map(d => d.cumulativePayout);
+        const s2_p5 = scenario2Data.map(d => d.p5);
+        const s2_p50 = scenario2Data.map(d => d.p50);
+        const s2_p95 = scenario2Data.map(d => d.p95);
+
+        const allData = [...s1_fv, ...s2_p5, ...s2_p95]; // p50 is within p5/p95
+        const minVal = Math.min(0, ...allData) * 1.1; 
         const maxVal = Math.max(...allData) * 1.1;
+
+        const s2_band_color = 'rgba(0, 123, 255, 0.1)'; // Light blue
+        const s2_median_color = 'rgba(0, 123, 255, 1)'; // Solid blue
+        const s1_color = '#dc3545'; // Red
 
         comparisonChart = createChart(
             comparisonChartCanvas, 
             labels, 
             [
                 {
-                    label: 'Scenario 2: Asset FV',
-                    data: dataPoints2,
-                    borderColor: '#007bff', // Blue
-                    backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                    label: 'Scenario 1: Pension Cumulative FV',
+                    data: s1_fv,
+                    borderColor: s1_color,
                     fill: false,
+                    borderDash: [5, 5],
+                    type: 'line',
+                },
+                 {
+                    label: 'S2: 5th Percentile',
+                    data: s2_p5,
+                    borderColor: s2_band_color,
+                    backgroundColor: 'transparent',
+                    fill: false,
+                    pointRadius: 0,
                     type: 'line',
                 },
                 {
-                    label: 'Scenario 1: Pension Cumulative FV',
-                    data: dataPoints1,
-                    borderColor: '#dc3545', // Red
-                    backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                    label: 'S2: 95th Percentile (90% CI)',
+                    data: s2_p95,
+                    borderColor: s2_band_color,
+                    backgroundColor: s2_band_color, // Shaded area
+                    fill: '-1', // Fill to the dataset above (p5)
+                    pointRadius: 0,
+                    type: 'line',
+                },
+                 {
+                    label: 'Scenario 2: 50th Percentile (Median)',
+                    data: s2_p50,
+                    borderColor: s2_median_color,
                     fill: false,
-                    borderDash: [5, 5],
                     type: 'line',
                 }
             ],
@@ -458,7 +559,7 @@ document.addEventListener('DOMContentLoaded', () => {
         comparisonChartCanvas.chart = comparisonChart;
     }
     
-    // [추가] Detailed View Table Generation Function
+    // [MODIFIED] Detailed View Table for Monte Carlo
     function generateDetailsTable(birthYear, scenario1Data, scenario2Data) {
         tableContainer.innerHTML = ''; 
         const table = document.createElement('table');
@@ -468,7 +569,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     <th>Year</th>
                     <th>Age</th>
                     <th>S1: Pension (Cumulative FV)</th>
-                    <th>S2: Asset (Balance FV)</th>
+                    <th>S2: 5th Percentile</th>
+                    <th>S2: 50th (Median)</th>
+                    <th>S2: 95th Percentile</th>
                 </tr>
             </thead>
             <tbody></tbody>
@@ -479,14 +582,18 @@ document.addEventListener('DOMContentLoaded', () => {
             const year = scenario1Data[i].year;
             const age = year - birthYear;
             const s1_fv = scenario1Data[i].cumulativePayout;
-            const s2_fv = scenario2Data[i].balance;
+            const s2_p5 = scenario2Data[i].p5;
+            const s2_p50 = scenario2Data[i].p50;
+            const s2_p95 = scenario2Data[i].p95;
 
             const row = tbody.insertRow();
             row.innerHTML = `
                 <td>${year}</td>
                 <td>${age}</td>
                 <td>$${s1_fv.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                <td>$${s2_fv.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                <td>$${s2_p5.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                <td>$${s2_p50.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                <td>$${s2_p95.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
             `;
         }
         
@@ -510,7 +617,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     ...d,
                     fill: d.fill !== undefined ? d.fill : (type === 'line' ? true : false),
                     tension: type === 'line' ? 0.1 : 0,
-                    pointRadius: type === 'line' ? 3 : 0,
+                    pointRadius: d.pointRadius !== undefined ? d.pointRadius : 3,
                 }))
             },
             options: {
@@ -524,6 +631,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     y: {
                         beginAtZero: false,
                         ticks: {
+                            // [BUG FIX] Removed 's' after '$'
                             callback: function(value) { return '$' + value.toLocaleString(); },
                             color: textColor
                         },
@@ -551,11 +659,19 @@ document.addEventListener('DOMContentLoaded', () => {
                             },
                             label: function(context) {
                                 let label = context.dataset.label || '';
+                                if (label.includes('Percentile')) {
+                                    if (label.includes('50th')) {
+                                        // Keep median visible
+                                    } else {
+                                        label = ''; // Hide percentile band labels from tooltip
+                                    }
+                                }
+
                                 if (label) {
                                     label += ': ';
-                                }
-                                if (context.parsed.y !== null) {
-                                    label += '$' + context.parsed.y.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                                    if (context.parsed.y !== null) {
+                                        label += '$' + context.parsed.y.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                                    }
                                 }
                                 return label;
                             }
