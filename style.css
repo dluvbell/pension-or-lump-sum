@@ -56,18 +56,29 @@ h2 { margin-top: 25px; font-size: 20px; color: var(--header-color); }
 p { color: var(--subtext-color); font-size: 14px; text-align: center; margin-bottom: 25px; }
 
 .input-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 18px; }
-/* [수정] Scenario 2 날짜/입력 그리드를 2열로 지정 */
-.scenario2-dates, .scenario2-inputs { grid-template-columns: repeat(2, 1fr); } 
+.scenario2-dates { grid-template-columns: repeat(2, 1fr); } 
 
 .input-group { margin-bottom: 18px; position: relative; } /* Added relative for age-display */
 .input-group label { display: block; margin-bottom: 6px; font-weight: 600; color: var(--text-color); font-size: 14px; }
-.input-group input { 
+/* [수정] select 요소도 input과 동일하게 스타일링 */
+.input-group input, .input-group select { 
     width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; 
     box-sizing: border-box; font-size: 16px; background-color: var(--container-bg-color); color: var(--text-color);
 }
-/* [수정] Age Display styles */
+/* [추가] select 화살표 아이콘 다크모드 수정 */
+body.dark-mode .input-group select {
+    background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23E0E0E0%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-13%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2013l128%20128c3.6%203.6%207.8%205.4%2013%205.4s9.4-1.8%2013-5.4l128-128c3.6-3.6%205.4-7.8%205.4-13%200-5-1.8-9.2-5.4-12.8z%22%2F%3E%3C%2Fsvg%3E');
+    background-repeat: no-repeat, repeat;
+    background-position: right .7em top 50%, 0 0;
+    background-size: .65em auto, 100%;
+    -moz-appearance: none;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+
 .age-display { 
-    font-size: 10px; /* Half the size of 14px */
+    font-size: 10px; 
     color: var(--subtext-color);
     display: block;
     margin-top: 4px;
@@ -83,7 +94,6 @@ button {
 }
 button:hover { background-color: #0056b3; }
 
-/* [수정] 토글 정렬을 space-between으로 변경 */
 .toggles-wrapper {
     display: flex;
     justify-content: space-between; 
@@ -97,7 +107,6 @@ button:hover { background-color: #0056b3; }
 #intermediate-result { font-size: 14px; background-color: var(--container-bg-color); padding: 10px; border-radius: 5px; margin-bottom: 15px; line-height: 1.5; }
 #result-text { font-size: 16px; color: var(--text-color); text-align: left; margin-bottom: 0; line-height: 1.6; }
 
-/* [추가] Detailed View 테이블 스타일 */
 #details-table-container { 
     margin-top: 25px; 
     width: 100%; 
@@ -110,8 +119,6 @@ button:hover { background-color: #0056b3; }
 #details-table-container td:first-child, #details-table-container th:first-child { text-align: center; }
 #details-table-container td:nth-child(2), #details-table-container th:nth-child(2) { text-align: center; }
 
-
-/* [수정] Graph container styles */
 #graph-container {
     display: none;
     margin-top: 25px;
@@ -139,7 +146,6 @@ button:hover { background-color: #0056b3; }
 input:checked + .slider { background-color: #007bff; }
 input:checked + .slider:before { transform: translateX(26px); }
 
-/* [수정] Details toggle container styles */
 .details-toggle-container {
     display: flex;
     align-items: center;
