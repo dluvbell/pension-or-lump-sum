@@ -4,9 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="author" content="dluvbell">
-    <title>Retirement Scenario Calculator: Comparison (v12)</title>
+    <title>Retirement Scenario Calculator: Comparison (v15 - Dropdown)</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js"></script>
 </head>
 <body>
     <div class="theme-switch-wrapper">
@@ -19,7 +20,7 @@
 
     <div class="calculator-container">
         <h1>Retirement Scenario Calculator: Comparison</h1>
-        <p>Compares the future value of a Lump Sum (Scenario 2) against a Pension (Scenario 1).</p>
+        <p>Compares the probabilistic FV of a Lump Sum (Scenario 2) against a Pension (Scenario 1).</p>
         
         <div class="input-grid common-inputs">
             <div class="input-group">
@@ -64,7 +65,7 @@
         <hr>
         
         <h2>Scenario 2: Lump Sum (CV/Asset)</h2>
-        <p style="margin-bottom: 5px; text-align: left;">* Enter your expected growth rate to simulate the asset value.</p>
+        <p style="margin-bottom: 5px; text-align: left;">* Enter mean return and volatility to run Monte Carlo simulation.</p>
 
         <div class="input-grid scenario2-dates">
             <div class="input-group">
@@ -79,20 +80,36 @@
             </div>
         </div>
         
-        <div class="input-grid scenario2-inputs">
-            <div class="input-group">
+        <div class="input-grid">
+             <div class="input-group">
                 <label for="initial_cv_value">Initial Lump Sum (CV, $)</label>
                 <input type="number" id="initial_cv_value" value="600000">
             </div>
             <div class="input-group">
-                <label for="asset_growth_rate">Asset Growth Rate (%)</label>
-                <input type="number" id="asset_growth_rate" value="6.0" step="0.1">
+                <label for="mean_return">Mean Annual Return (%)</label>
+                <input type="number" id="mean_return" value="7.0" step="0.1">
+            </div>
+             <div class="input-group">
+                <label for="volatility">Annual Volatility (Std Dev, %)</label>
+                <input type="number" id="volatility" value="15.0" step="0.1">
             </div>
         </div>
         
+        <div class="input-group">
+            <label for="simulation_count">Simulation Count (N)</label>
+            <select id="simulation_count">
+                <option value="1000">1,000 (Fast)</option>
+                <option value="5000">5,000</option>
+                <option value="10000">10,000 (Recommended)</option>
+                <option value="50000">50,000 (Very Slow)</option>
+                <option value="100000">100,000 (May Freeze)</option>
+            </select>
+        </div>
+
+        
         <button id="manage-cw-btn">Manage Annual Contributions/Withdrawals</button>
 
-        <button id="calculate-btn" style="margin-top: 20px;">Run Comparison</button>
+        <button id="calculate-btn" style="margin-top: 20px;">Run Simulation</button>
 
         <div class="toggles-wrapper">
             <div class="details-toggle-container">
@@ -113,13 +130,13 @@
 
 
         <div id="result-container" class="hidden">
-            <h2>Calculation Results</h2>
+            <h2>Simulation Results</h2>
             <div id="intermediate-result"></div>
             <p id="result-text"></p>
         </div>
 
         <div id="graph-container">
-            <h3>Scenario Comparison: Future Value (FV)</h3>
+            <h3>Probabilistic Comparison: Asset FV vs. Pension FV</h3>
             <canvas id="comparison-chart"></canvas>
         </div>
 
